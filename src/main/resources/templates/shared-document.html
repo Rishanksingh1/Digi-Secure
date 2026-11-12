@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Shared document - Digi Secure</title>
+    <link rel="stylesheet" th:href="@{/css/style.css}">
+</head>
+<body class="auth-page">
+    <main class="auth-container shared-container" th:if="${link}"
+          id="active-shared-document" th:attr="data-expires-at=${expiresAtEpochMillis}">
+        <div class="brand-mark shared-mark" aria-label="Digi Secure logo">DS</div>
+        <p class="eyebrow">DIGI SECURE</p>
+        <h2>Shared document</h2>
+        <p class="subtitle">This document was shared with you securely.</p>
+
+        <section th:if="${accessRequired}">
+            <p class="alert alert-error" th:if="${error}" th:text="${error}"></p>
+            <p class="alert alert-success" th:if="${codeSent}">
+                A one-time code was sent to the recipient email specified by the owner. It expires in 10 minutes.
+            </p>
+            <p class="alert alert-recognition" th:if="${codeAlreadySent}">
+                A code was recently sent. Check the recipient email inbox and spam folder; request another attempt after one minute.
+            </p>
+            <p class="subtitle" th:if="${link.accessMode == 'PIN'}">Enter the PIN supplied by the owner.</p>
+            <p class="subtitle" th:if="${link.accessMode == 'EMAIL_OTP'}">
+                Enter the one-time code sent to the recipient email address configured by the owner.
+            </p>
+            <form method="post"
+                  th:if="${link.accessMode == 'PIN' or (error == null and (codeSent == true or codeAlreadySent == true))}"
+                  th:action="@{/share/{token}/unlock(token=${link.token})}">
+                <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}"/>
+                <div class="form-group">
+                    <label for="access-code" th:text="${link.accessMode == 'PIN' ? 'PIN' : 'One-time code'}">Access code</label>
+                    <input id="access-code" name="code" type="password" maxlength="64" required autofocus/>
+                </div>
+                <button class="btn-primary" type="submit">Continue</button>
+            </form>
+        </section>
+
+        <div class="shared-file" th:unless="${accessRequired}">
+            <strong th:text="${link.document.fileName}">document.pdf</strong>
+            <span th:text="${link.document.fileType}">application/pdf</span>
+            <span th:text="${'Available until ' + #temporals.format(link.expiryDate, 'dd MMM yyyy, HH:mm')}">Available until</span>
+        </div>
+
+        <div class="shared-preview"
+             th:if="${!accessRequired and link.allowDownload and #strings.startsWith(link.document.fileType, 'application/pdf')}">
+            <iframe th:src="${'/share/' + link.token + '/view#toolbar=0&amp;view=FitH'}"
+                    title="Document preview" class="shared-pdf-frame"></iframe>
+        </div>
+
+        <div class="shared-preview"
+             th:if="${!accessRequired and !link.allowDownload and #strings.startsWith(link.document.fileType, 'application/pdf')}">
+            <div class="shared-pdf-pages" th:if="${previewPageCount > 0}">
+                <img th:each="pageIndex : ${#numbers.sequence(0, previewPageCount - 1)}"
+                     th:src="@{/share/{token}/view(token=${link.token},page=${pageIndex})}"
+                     th:alt="${'Watermarked PDF page ' + (pageIndex + 1)}"
+                     class="shared-preview-image" loading="lazy"/>
+            </div>
+            <p class="alert alert-error" th:if="${previewError}" th:text="${previewError}"></p>
+        </div>
+
+        <div class="shared-preview" th:if="${!accessRequired and #strings.startsWith(link.document.fileType, 'image/')}">
+            <img th:src="@{/share/{token}/view(token=${link.token})}" alt="Document preview"
+                 class="shared-preview-image"/>
+        </div>
+
+        <p class="subtitle"
+           th:if="${!accessRequired and !#strings.startsWith(link.document.fileType, 'application/pdf') and !#strings.startsWith(link.document.fileType, 'image/')}">
+            Preview isn't available for this file type.
+        </p>
+
+        <a class="btn-primary shared-download" th:if="${!accessRequired and link.allowDownload}"
+           th:href="@{/share/{token}/download(token=${link.token})}">Download document</a>
+        <p class="subtitle" th:if="${!accessRequired and !link.allowDownload}">
+            Downloads are disabled. The preview is watermarked; screenshots and screen capture cannot be prevented.
+        </p>
+    </main>
+
+    <main class="auth-container shared-container" id="expired-shared-document" hidden>
+        <div class="brand-mark shared-mark" aria-label="Digi Secure logo">DS</div>
+        <p class="eyebrow">DIGI SECURE</p>
+        <h2>Link expired</h2>
+        <p class="subtitle">This share link has expired and the document is no longer available.</p>
+    </main>
+
+    <main class="auth-container shared-container" th:unless="${link}">
+        <div class="brand-mark shared-mark" aria-label="Digi Secure logo">DS</div>
+        <p class="eyebrow">DIGI SECURE</p>
+        <h2>Link unavailable</h2>
+        <p class="subtitle" th:text="${error}">This share link is invalid or expired.</p>
+    </main>
+    <script th:if="${link}">
+        const sharedDocument = document.querySelector('[data-expires-at]');
+        const expiresAt = Number(sharedDocument.dataset.expiresAt);
+        let expiryTimer;
+        function expireSharedDocument() {
+            const expiredAt = Date.now() >= expiresAt;
+            if (!expiredAt) {
+                return false;
+            }
+
+            sharedDocument.replaceChildren();
+            sharedDocument.hidden = true;
+            document.getElementById('expired-shared-document').hidden = false;
+            return true;
+        }
+
+        function enforceShareExpiry() {
+            const remaining = expiresAt - Date.now();
+            if (remaining <= 0) {
+                expireSharedDocument();
+                return;
+            }
+            window.clearTimeout(expiryTimer);
+            expiryTimer = window.setTimeout(enforceShareExpiry, Math.min(remaining, 2147483647));
+        }
+
+        enforceShareExpiry();
+        document.addEventListener('visibilitychange', function () {
+            if (!document.hidden) {
+                if (expireSharedDocument()) {
+                    return;
+                }
+                enforceShareExpiry();
+            }
+        });
+    </script>
+</body>
+</html>

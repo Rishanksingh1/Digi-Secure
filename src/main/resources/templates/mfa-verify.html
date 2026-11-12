@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Verify identity - Digi Secure</title>
+    <link rel="stylesheet" th:href="@{/css/style.css}">
+</head>
+<body class="auth-page">
+    <main class="auth-container mfa-container">
+        <div class="brand-mark shared-mark" aria-label="Digi Secure logo">DS</div>
+        <p class="eyebrow">SECOND-STEP VERIFICATION</p>
+        <h2>Verify your identity</h2>
+        <p class="subtitle">Enter the six-digit code from Microsoft Authenticator to access your locker.</p>
+        <p class="alert alert-error" th:if="${error}" th:text="${error}"></p>
+        <form method="post" th:action="@{/mfa/verify}">
+            <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}"/>
+            <div class="form-group">
+                <label for="code">Authenticator code</label>
+                <input id="code" type="text" name="code" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" placeholder="000000" required autofocus/>
+            </div>
+            <button class="btn-primary" type="submit">Verify and continue</button>
+        </form>
+        <p class="switch-link"><a th:href="@{/login}">Cancel and return to login</a></p>
+    </main>
+</body>
+</html>

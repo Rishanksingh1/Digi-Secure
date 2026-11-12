@@ -1,0 +1,872 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>Dashboard - Digi Secure</title>
+    <link rel="stylesheet" th:href="@{/css/style.css}">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="navbar-brand">
+            <div class="logo-icon-sm" aria-label="Digi Secure logo">DS</div>
+            <span>Digi Secure</span>
+        </div>
+        <div class="navbar-user">
+            <details class="profile-menu">
+                <summary class="profile-trigger" aria-label="Open profile menu">
+                    <div class="user-avatar" th:text="${#strings.substring(email,0,1).toUpperCase()}">R</div>
+                    <span class="profile-chevron">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                           <polyline points="6 9 12 15 18 9"></polyline>
+                        </svg>
+                    </span>
+                </summary>
+                <div class="profile-panel">
+                    <div class="profile-heading">
+                        <div class="profile-avatar-large" th:text="${#strings.substring(email,0,1).toUpperCase()}">R</div>
+                        <div>
+                            <strong>My account</strong>
+                            <span th:text="${email}">user@example.com</span>
+                        </div>
+                    </div>
+                    <div class="profile-security">
+                        <span class="status-dot"></span>
+                        <span>
+                            <strong>Account protected</strong>
+                            <small>Manage your sign-in security</small>
+                        </span>
+                    </div>
+                    <a class="profile-action" th:href="@{/mfa/setup}">
+                        <span class="profile-action-icon">+</span>
+                        <span>Security settings<small>Microsoft Authenticator</small></span>
+                    </a>
+                    <form class="profile-logout" th:action="@{/logout}" method="post">
+                        <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}"/>
+                        <button type="submit">Log out</button>
+                    </form>
+                </div>
+            </details>
+        </div>
+    </nav>
+
+    <div class="page-wrap">
+        <section class="dashboard-hero">
+            <div class="page-header">
+                <div>
+                    <p class="eyebrow page-eyebrow">Private workspace</p>
+                    <h1>Your secure file space</h1>
+                    <p class="page-sub">Store, organize, and share important documents with confidence.</p>
+                    <div class="hero-meta">
+                        <span><i class="meta-check">&#10003;</i> AES encrypted</span>
+                        <span><i class="meta-check">&#10003;</i> Private by default</span>
+                    </div>
+                </div>
+                <div class="hero-security-card">
+                    <div class="vault-emblem"><span></span></div>
+                    <div>
+                        <span class="vault-label">Vault status</span>
+                        <strong>Protected</strong>
+                        <small>Encryption is active</small>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <form class="search-form" method="get" th:action="@{/dashboard}">
+            <input type="search" name="query" th:value="${query}" placeholder="Search your documents" aria-label="Search documents"/>
+            <input type="hidden" name="folder" th:value="${selectedFolder}"/>
+            <button class="btn-secondary-sm" type="submit">Search</button>
+        </form>
+
+        <div class="vault-telemetry" aria-label="Vault status">
+            <span class="telemetry-line"></span>
+            <span>LOCAL VAULT</span>
+            <i></i>
+            <span>AES-GCM</span>
+            <i></i>
+            <span class="telemetry-ready"><b></b> READY</span>
+            <span class="telemetry-line telemetry-line-end"></span>
+        </div>
+
+        <p class="alert alert-error" th:if="${error}" th:text="${error}"></p>
+        <p class="alert alert-error" th:if="${folderError}" th:text="${folderError}"></p>
+        <p class="alert alert-success" th:if="${success}" th:text="${success}"></p>
+        <p class="alert alert-recognition" th:if="${recognitionNotice}" th:text="${recognitionNotice}"></p>
+        <section class="recognition-result" th:if="${recognizedType}">
+            <strong>Recognition suggestion</strong>
+            <span th:text="${recognizedType + ' - ' + recognizedCategory}">Document type - category</span>
+            <span th:each="entry : ${recognitionMetadata}"
+                  th:text="${entry.key + ': ' + entry.value}">Metadata</span>
+        </section>
+        <p class="alert alert-success" th:if="${param.mfaEnabled}">Multi-factor authentication enabled</p>
+        <p class="alert alert-success share-result" th:if="${shareUrl}">
+            Share link created: <a th:href="${shareUrl}" th:text="${shareUrl}"></a>
+        </p>
+
+        <div class="stats-grid">
+            <div class="stat-card stat-documents">
+                <div class="stat-icon">DOC</div>
+                <div class="stat-value" id="total-document-count" th:text="${totalDocuments}">0</div>
+                <div class="stat-label">Total Documents</div>
+            </div>
+            <div class="stat-card stat-links">
+                <div class="stat-icon">LINK</div>
+                <div class="stat-value" id="active-shared-link-count" th:text="${activeSharedLinkCount}">0</div>
+                <div class="stat-label">Active Shared Links</div>
+            </div>
+            <div class="stat-card stat-storage">
+                <div class="stat-icon">DATA</div>
+                <div class="stat-value" id="storage-used" th:text="${storageUsed}">0 KB</div>
+                <div class="stat-label">Storage Used</div>
+            </div>
+        </div>
+
+        <div class="collection-heading">
+            <div>
+                <p class="eyebrow">Document library</p>
+                <h2 th:text="${folderLabel}">All files</h2>
+            </div>
+            <div class="collection-tools">
+                <span class="collection-note">Encrypted at rest</span>
+                <form class="upload-form" method="post" th:action="@{/documents/upload}" enctype="multipart/form-data">
+                    <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}"/>
+                    <label class="btn-primary-sm" for="document-file">+ Upload document</label>
+                    <input id="document-file" class="file-input" type="file" name="file" required
+                           onchange="this.form.submit()"/>
+                </form>
+            </div>
+        </div>
+
+        <nav class="folder-grid" aria-label="Document folders">
+            <a class="folder-card" th:classappend="${selectedFolder == 'all'} ? ' is-active' : ''"
+               data-folder-key="all" data-folder-label="All files"
+               th:href="@{/dashboard(query=${query},folder='all')}">
+                <span class="folder-icon">ALL</span>
+                <span class="folder-details"><strong>All files</strong><small>Every uploaded document</small></span>
+                <span class="folder-count" data-folder-key="all" th:text="${totalDocuments}">0</span>
+            </a>
+            <a class="folder-card" th:each="folderItem : ${documentFolders}"
+               th:classappend="${selectedFolder == folderItem.key} ? ' is-active' : ''"
+               th:attr="data-folder-key=${folderItem.key},data-folder-label=${folderItem.label}"
+               th:href="@{/dashboard(query=${query},folder=${folderItem.key})}">
+                <span class="folder-icon" th:text="${folderItem.icon}">PDF</span>
+                <span class="folder-details">
+                    <strong th:text="${folderItem.label}">PDFs</strong>
+                    <small th:text="${folderItem.label == 'PDFs' ? 'PDF documents' : (folderItem.label == 'Images' ? 'Image files' : 'Other file types')}">File type</small>
+                </span>
+                <span class="folder-count" th:attr="data-folder-key=${folderItem.key}"
+                      th:text="${folderCounts[folderItem.key] != null ? folderCounts[folderItem.key] : 0}">0</span>
+            </a>
+        </nav>
+
+        <div class="empty-state" id="documents-empty-state" hidden
+             th:attr="data-query=${query}">
+            <div class="icon">?</div>
+            <h3 id="documents-empty-title"
+                th:text="${!#strings.isEmpty(query) ? 'No matching documents' : (selectedFolder == 'all' ? 'No documents yet' : 'This folder is empty')}">
+                No matching documents
+            </h3>
+            <p id="documents-empty-message"
+               th:text="${!#strings.isEmpty(query) ? 'Try another filename or clear the search.' : (selectedFolder == 'all' ? 'Upload your first file to get started. It will be encrypted before storage.' : 'Upload a file of this type and it will appear here automatically.')}">
+                Upload your first file to get started.
+            </p>
+        </div>
+
+        <div class="document-list" id="document-list" th:hidden="${#lists.isEmpty(documents)}">
+            <div class="document-row" th:each="document : ${documents}"
+                 th:attr="data-folder-key=${document.folderKey}">
+                <div class="document-icon" th:text="${document.folderKey == 'pdfs' ? 'PDF' : (document.folderKey == 'images' ? 'IMG' : 'FILE')}">FILE</div>
+                <div class="document-info">
+                    <a class="document-preview-link"
+                       th:if="${#strings.startsWith(document.fileType, 'application/pdf') or #strings.startsWith(document.fileType, 'image/')}"
+                       th:href="@{/documents/{id}/preview(id=${document.id})}"
+                       target="_blank" rel="noopener"
+                       th:text="${document.fileName}"
+                       th:attr="aria-label=${'Preview ' + document.fileName}">
+                        document.pdf
+                    </a>
+                    <strong class="document-name-unpreviewable"
+                            th:unless="${#strings.startsWith(document.fileType, 'application/pdf') or #strings.startsWith(document.fileType, 'image/')}"
+                            th:text="${document.fileName}"
+                            title="Preview is available for PDF and image files. Download this file to open it.">
+                        document.docx
+                    </strong>
+                    <span th:text="${document.fileType + '  |  ' + document.fileSize + ' bytes'}">application/pdf</span>
+                    <span class="document-category"
+                          th:text="${document.folderLabel + '  |  ' + document.documentType + '  |  ' + document.category}">Folder | Document type | Category</span>
+                </div>
+                <span class="file-state"><i></i> Encrypted</span>
+                <div class="document-actions">
+                    <a class="btn-secondary-sm" th:href="@{/documents/{id}/download(id=${document.id})}">Download</a>
+                    <button class="btn-secondary-sm share-trigger" type="button"
+                            th:attr="data-document-id=${document.id},data-document-name=${document.fileName}">
+                        <span aria-hidden="true">↗</span> Share
+                    </button>
+                    <form method="post" th:action="@{/documents/{id}/delete(id=${document.id})}"
+                          th:attr="data-async-action=@{/documents/{id}/delete-async(id=${document.id})}">
+                        <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}"/>
+                        <button class="btn-danger-sm" type="submit">Delete</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+        <p class="alert" id="document-delete-status" role="status" aria-live="polite" hidden></p>
+
+        <section class="activity-section share-access-section" th:if="${!#lists.isEmpty(shareAccessLogs)}">
+            <div class="section-heading progressive-heading">
+                <div>
+                    <p class="eyebrow">Sharing activity</p>
+                    <h2>Recent shared-link access</h2>
+                </div>
+                <button class="btn-secondary-sm progressive-toggle" type="button"
+                        aria-controls="share-access-events" aria-expanded="false"
+                        th:if="${#lists.size(shareAccessLogs) > 1}"
+                        th:attr="data-remaining=${#lists.size(shareAccessLogs) - 1}"
+                        th:text="${'Show all (' + (#lists.size(shareAccessLogs) - 1) + ')'}">
+                    Show all (4)
+                </button>
+            </div>
+            <div class="activity-list share-access-list progressive-list is-collapsed" id="share-access-events">
+                <article class="activity-row share-access-row"
+                         th:each="access, iterStat : ${shareAccessLogs}"
+                         th:classappend="${iterStat.index > 0} ? ' is-extra-row' : ''">
+                    <span class="access-action"
+                          th:classappend="${access.action == 'DOWNLOAD'} ? ' access-action-download' : ''"
+                          th:text="${access.action == 'DOWNLOAD' ? 'File downloaded' : 'Shared link opened'}"
+                          th:attr="aria-label=${access.action == 'DOWNLOAD' ? 'File downloaded event' : 'Shared link opened event'}">
+                        Shared link opened
+                    </span>
+                    <div class="access-details">
+                        <strong class="access-file" th:text="${access.sharedLink.document.fileName}">document.pdf</strong>
+                        <span class="access-address" th:text="${'IP address · ' + access.ipAddress}">IP address · 127.0.0.1</span>
+                    </div>
+                    <time class="access-time" th:text="${#temporals.format(access.accessedAt, 'dd MMM yyyy, HH:mm')}">
+                        Access time
+                    </time>
+                    <div class="access-client" aria-label="Browser and platform">
+                        <span class="client-detail">
+                            <small>Browser</small>
+                            <strong th:text="${access.clientDetails.browser}">Unknown</strong>
+                        </span>
+                        <span class="client-detail">
+                            <small>Platform</small>
+                            <strong th:text="${access.clientDetails.platform}">Unknown</strong>
+                        </span>
+                    </div>
+                </article>
+            </div>
+        </section>
+
+        <section class="activity-section" th:if="${!#lists.isEmpty(activeSharedLinks)}">
+            <div class="section-heading progressive-heading">
+                <div>
+                    <p class="eyebrow">Link controls</p>
+                    <h2>Active shared links</h2>
+                </div>
+                <button class="btn-secondary-sm progressive-toggle" type="button"
+                        aria-controls="active-shared-links" aria-expanded="false"
+                        th:if="${#lists.size(activeSharedLinks) > 1}"
+                        th:attr="data-remaining=${#lists.size(activeSharedLinks) - 1}"
+                        th:text="${'Show all (' + (#lists.size(activeSharedLinks) - 1) + ')'}">
+                    Show all (3)
+                </button>
+            </div>
+            <div class="activity-list progressive-list is-collapsed" id="active-shared-links">
+                <div class="activity-row" th:each="sharedLink, iterStat : ${activeSharedLinks}"
+                     th:classappend="${iterStat.index > 0} ? ' is-extra-row' : ''">
+                    <strong th:text="${sharedLink.document.fileName}">document.pdf</strong>
+                    <span th:text="${sharedLink.viewCount + ' views · ' + sharedLink.downloadCount + ' downloads'}">
+                        0 views · 0 downloads
+                    </span>
+                    <time th:text="${#temporals.format(sharedLink.expiryDate, 'dd MMM yyyy, HH:mm')}">
+                        Expires
+                    </time>
+                    <form class="revoke-share-form" method="post"
+                          th:action="@{/api/share/{token}/revoke(token=${sharedLink.token})}">
+                        <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}"/>
+                        <button class="btn-danger-sm" type="submit">Revoke</button>
+                    </form>
+                </div>
+            </div>
+            <p class="share-link-status" id="revoke-share-status" role="status" aria-live="polite"></p>
+            <p class="subtitle" id="no-active-shared-links" hidden>No active shared links.</p>
+        </section>
+
+        <section class="activity-section" th:if="${!#lists.isEmpty(activityLogs)}">
+            <div class="section-heading progressive-heading">
+                <div>
+                    <p class="eyebrow">Audit trail</p>
+                    <h2>Recent activity</h2>
+                </div>
+                <button class="btn-secondary-sm progressive-toggle" type="button"
+                        aria-controls="recent-activity-events" aria-expanded="false"
+                        th:if="${#lists.size(activityLogs) > 1}"
+                        th:attr="data-remaining=${#lists.size(activityLogs) - 1}"
+                        th:text="${'Show all (' + (#lists.size(activityLogs) - 1) + ')'}">
+                    Show all (19)
+                </button>
+            </div>
+            <div class="activity-list progressive-list is-collapsed" id="recent-activity-events">
+                <div class="activity-row" th:each="activity, iterStat : ${activityLogs}"
+                     th:classappend="${iterStat.index > 0} ? ' is-extra-row' : ''">
+                    <strong th:text="${activity.action}">UPLOAD</strong>
+                    <span th:text="${activity.document != null ? activity.document.fileName : 'Account activity'}">document.pdf</span>
+                    <time th:text="${#temporals.format(activity.timestamp, 'dd MMM yyyy, HH:mm')}">11 Sep 2026</time>
+                </div>
+            </div>
+        </section>
+    </div>
+    <dialog class="share-dialog" id="share-dialog" aria-labelledby="share-dialog-title">
+        <div class="share-dialog-header">
+            <div>
+                <p class="eyebrow">Private sharing</p>
+                <h2 id="share-dialog-title">Share document</h2>
+            </div>
+            <button class="share-dialog-close" type="button" aria-label="Close share dialog">&times;</button>
+        </div>
+        <div class="share-document-card">
+            <span class="share-document-icon" aria-hidden="true">DOC</span>
+            <span class="share-document-name" id="share-document-name">document.pdf</span>
+            <span class="share-document-private">Encrypted</span>
+        </div>
+        <section class="direct-file-share">
+            <div>
+                <strong>Send the actual file</strong>
+                <p>This sends a copy through your device’s share options. Recipients may keep or forward it.</p>
+            </div>
+            <button class="btn-secondary-sm" id="share-actual-file" type="button">Share file</button>
+        </section>
+        <p class="share-link-status" id="share-file-status" role="status" aria-live="polite"></p>
+        <p class="share-link-policy">
+            Expiration and download permissions apply to secure links below, not to file copies sent directly.
+        </p>
+        <form class="share-dialog-form" id="share-dialog-form" method="post">
+            <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}"/>
+            <label class="share-field">
+                <span>Link expiration</span>
+                <select name="expiryHours">
+                    <option value="1440">Expires in 24 hours</option>
+                    <option value="10080">Expires in 7 days</option>
+                    <option value="43200">Expires in 30 days</option>
+                    <option value="custom">Custom duration</option>
+                </select>
+            </label>
+            <div class="custom-expiry-fields" id="custom-expiry-fields" hidden>
+                <label class="share-field" for="custom-expiry-value">
+                    <span>Custom expiration</span>
+                    <div class="custom-expiry-control">
+                        <input id="custom-expiry-value" type="number" min="1" max="43200"
+                               value="1" inputmode="numeric" aria-describedby="custom-expiry-help"/>
+                        <select id="custom-expiry-unit" aria-label="Custom expiration unit">
+                            <option value="minutes">Minutes</option>
+                            <option value="hours">Hours</option>
+                            <option value="days">Days</option>
+                        </select>
+                    </div>
+                    <small id="custom-expiry-help">Choose 1 minute up to 30 days.</small>
+                </label>
+            </div>
+            <label class="permission-toggle">
+                <input type="checkbox" name="allowDownload" value="true"/>
+                <span>
+                    <strong>Allow download</strong>
+                    <small>When disabled, only a watermarked preview is sent; screenshots or capture cannot be prevented.</small>
+                </span>
+            </label>
+            <label class="share-field">
+                <span>Maximum downloads/views (optional)</span>
+                <input type="number" name="maxUses" min="1" max="1000" placeholder="Unlimited"/>
+                <small>When downloads are enabled, this limits downloads; otherwise, it limits previews.</small>
+            </label>
+            <label class="share-field">
+                <span>Extra access protection</span>
+                <select name="accessMode" id="share-access-mode">
+                    <option value="NONE">No extra protection</option>
+                    <option value="PIN">Require a PIN</option>
+                    <option value="EMAIL_OTP" th:disabled="${!emailOtpAvailable}">
+                        Email a one-time code (SMTP required)
+                    </option>
+                </select>
+                <small class="share-field-notice" th:if="${!emailOtpAvailable}">
+                    Email codes are unavailable until the application owner configures SMTP.
+                </small>
+            </label>
+            <label class="share-field" id="share-pin-field" hidden>
+                <span>PIN</span>
+                <input type="password" name="pin" minlength="4" maxlength="64" autocomplete="new-password"/>
+            </label>
+            <label class="share-field" id="share-recipient-field" hidden>
+                <span>Recipient email</span>
+                <input type="email" name="recipientEmail" autocomplete="email"/>
+            </label>
+            <p class="share-dialog-error" id="share-dialog-error" role="alert" hidden></p>
+            <button class="btn-primary-sm share-create-button" id="share-create-button" type="submit">
+                Create secure link
+            </button>
+        </form>
+        <section class="share-link-result" id="share-link-result" hidden aria-live="polite">
+            <label for="share-link-value">Share link</label>
+            <div class="share-link-copy">
+                <input id="share-link-value" type="text" readonly/>
+                <button class="btn-secondary-sm" id="copy-share-link" type="button">Copy</button>
+            </div>
+            <p class="share-link-status" id="share-link-status"></p>
+            <h3>Share using</h3>
+            <div class="share-app-grid">
+                <button class="share-app-button share-native-button" id="native-share-link" type="button" hidden>
+                    <span class="share-app-icon">↗</span><span>More apps</span>
+                </button>
+                <a class="share-app-button" id="whatsapp-share-link" target="_blank" rel="noopener noreferrer">
+                    <span class="share-app-icon share-whatsapp-icon">WA</span><span>WhatsApp</span>
+                </a>
+                <a class="share-app-button" id="email-share-link">
+                    <span class="share-app-icon share-email-icon">@</span><span>Email</span>
+                </a>
+                <a class="share-app-button" id="telegram-share-link" target="_blank" rel="noopener noreferrer">
+                    <span class="share-app-icon share-telegram-icon">TG</span><span>Telegram</span>
+                </a>
+            </div>
+        </section>
+    </dialog>
+    <script>
+        const documentList = document.getElementById('document-list');
+        const documentEmptyState = document.getElementById('documents-empty-state');
+        const folderHeading = document.querySelector('.collection-heading h2');
+        const folderCards = Array.from(document.querySelectorAll('.folder-card'));
+        const searchForm = document.querySelector('.search-form');
+
+        function updateDocumentFolderView(folderKey) {
+            const activeCard = folderCards.find(function (card) {
+                return card.dataset.folderKey === folderKey;
+            }) || folderCards[0];
+            const selectedFolder = activeCard ? activeCard.dataset.folderKey : 'all';
+            const query = new URLSearchParams(window.location.search).get('query') || '';
+            const rows = Array.from(documentList.querySelectorAll('.document-row'));
+            let visibleCount = 0;
+
+            rows.forEach(function (row) {
+                const visible = selectedFolder === 'all' || row.dataset.folderKey === selectedFolder;
+                row.hidden = !visible;
+                if (visible) {
+                    visibleCount += 1;
+                }
+            });
+
+            documentList.hidden = visibleCount === 0;
+            documentEmptyState.hidden = visibleCount !== 0;
+            const isSearching = query.trim().length > 0;
+            const isAllFiles = selectedFolder === 'all';
+            document.getElementById('documents-empty-title').textContent = isSearching
+                ? 'No matching documents'
+                : (isAllFiles ? 'No documents yet' : 'This folder is empty');
+            document.getElementById('documents-empty-message').textContent = isSearching
+                ? 'Try another filename or clear the search.'
+                : (isAllFiles
+                    ? 'Upload your first file to get started. It will be encrypted before storage.'
+                    : 'Upload a file of this type and it will appear here automatically.');
+            folderHeading.textContent = activeCard ? activeCard.dataset.folderLabel : 'All files';
+            folderCards.forEach(function (card) {
+                const isActive = card === activeCard;
+                card.classList.toggle('is-active', isActive);
+                if (isActive) {
+                    card.setAttribute('aria-current', 'page');
+                } else {
+                    card.removeAttribute('aria-current');
+                }
+            });
+        }
+
+        folderCards.forEach(function (card) {
+            card.addEventListener('click', function (event) {
+                if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
+                    return;
+                }
+                event.preventDefault();
+                const destination = new URL(card.href);
+                window.history.pushState({}, '', destination);
+                updateDocumentFolderView(card.dataset.folderKey);
+            });
+        });
+
+        window.addEventListener('popstate', function () {
+            const params = new URLSearchParams(window.location.search);
+            const folderKey = params.get('folder') || 'all';
+            if (searchForm) {
+                searchForm.elements.query.value = params.get('query') || '';
+            }
+            updateDocumentFolderView(folderKey);
+        });
+
+        updateDocumentFolderView(new URLSearchParams(window.location.search).get('folder') || 'all');
+
+        const shareDialog = document.getElementById('share-dialog');
+        const shareForm = document.getElementById('share-dialog-form');
+        const shareError = document.getElementById('share-dialog-error');
+        const shareResult = document.getElementById('share-link-result');
+        const shareLinkInput = document.getElementById('share-link-value');
+        const shareStatus = document.getElementById('share-link-status');
+        const createShareButton = document.getElementById('share-create-button');
+        const expirySelect = shareForm.elements.expiryHours;
+        const customExpiryFields = document.getElementById('custom-expiry-fields');
+        const customExpiryValue = document.getElementById('custom-expiry-value');
+        const customExpiryUnit = document.getElementById('custom-expiry-unit');
+        const accessModeSelect = document.getElementById('share-access-mode');
+        const pinField = document.getElementById('share-pin-field');
+        const recipientField = document.getElementById('share-recipient-field');
+        const pinInput = shareForm.elements.pin;
+        const recipientInput = shareForm.elements.recipientEmail;
+        let currentShareName = '';
+        let currentShareDocumentId = '';
+
+        function updateAccessFields() {
+            const requiresPin = accessModeSelect.value === 'PIN';
+            const requiresEmail = accessModeSelect.value === 'EMAIL_OTP';
+            pinField.hidden = !requiresPin;
+            recipientField.hidden = !requiresEmail;
+            pinInput.disabled = !requiresPin;
+            recipientInput.disabled = !requiresEmail;
+            pinInput.required = requiresPin;
+            recipientInput.required = requiresEmail;
+        }
+
+        accessModeSelect.addEventListener('change', updateAccessFields);
+
+        expirySelect.addEventListener('change', function () {
+            const isCustom = expirySelect.value === 'custom';
+            customExpiryFields.hidden = !isCustom;
+            customExpiryValue.required = isCustom;
+            if (isCustom) {
+                customExpiryValue.focus();
+            }
+        });
+
+        document.querySelectorAll('.share-trigger').forEach(function (button) {
+            button.addEventListener('click', function () {
+                currentShareName = button.dataset.documentName;
+                currentShareDocumentId = button.dataset.documentId;
+                document.getElementById('share-document-name').textContent = currentShareName;
+                shareForm.action = '/api/documents/' + encodeURIComponent(currentShareDocumentId) + '/share';
+                shareForm.reset();
+                updateAccessFields();
+                customExpiryFields.hidden = true;
+                customExpiryValue.required = false;
+                shareError.hidden = true;
+                shareResult.hidden = true;
+                shareLinkInput.value = '';
+                shareStatus.textContent = '';
+                createShareButton.disabled = false;
+                createShareButton.textContent = 'Create secure link';
+                shareDialog.showModal();
+            });
+        });
+
+        document.querySelector('.share-dialog-close').addEventListener('click', function () {
+            shareDialog.close();
+        });
+
+        shareDialog.addEventListener('click', function (event) {
+            if (event.target === shareDialog) {
+                shareDialog.close();
+            }
+        });
+
+        shareForm.addEventListener('submit', async function (event) {
+            event.preventDefault();
+            shareError.hidden = true;
+            let expiryMinutes = Number(expirySelect.value);
+            if (expirySelect.value === 'custom') {
+                const duration = Number(customExpiryValue.value);
+                const multipliers = { minutes: 1, hours: 60, days: 1440 };
+                expiryMinutes = duration * multipliers[customExpiryUnit.value];
+                if (!Number.isInteger(duration) || duration < 1 || expiryMinutes > 43200) {
+                    shareError.textContent = 'Choose a whole-number duration between 1 minute and 30 days.';
+                    shareError.hidden = false;
+                    customExpiryValue.focus();
+                    return;
+                }
+            }
+            createShareButton.disabled = true;
+            createShareButton.textContent = 'Creating link…';
+            try {
+                const formData = new FormData(shareForm);
+                formData.delete('expiryHours');
+                formData.set('expiryMinutes', String(expiryMinutes));
+                if (!formData.get('maxUses')) {
+                    formData.delete('maxUses');
+                }
+                if (accessModeSelect.value !== 'PIN') {
+                    formData.delete('pin');
+                }
+                if (accessModeSelect.value !== 'EMAIL_OTP') {
+                    formData.delete('recipientEmail');
+                }
+                const response = await fetch(shareForm.action, {
+                    method: 'POST',
+                    body: formData,
+                    headers: { 'Accept': 'application/json' }
+                });
+                const result = await response.json();
+                if (!response.ok) {
+                    throw new Error(result.error || 'Unable to create a share link. Please try again.');
+                }
+                shareLinkInput.value = result.shareUrl;
+                shareResult.hidden = false;
+                const message = currentShareName + ' — ' + result.shareUrl;
+                document.getElementById('whatsapp-share-link').href =
+                    'https://wa.me/?text=' + encodeURIComponent(message);
+                document.getElementById('email-share-link').href =
+                    'mailto:?subject=' + encodeURIComponent('Shared document: ' + currentShareName)
+                    + '&body=' + encodeURIComponent(message);
+                document.getElementById('telegram-share-link').href =
+                    'https://t.me/share/url?url=' + encodeURIComponent(result.shareUrl)
+                    + '&text=' + encodeURIComponent(currentShareName);
+                document.getElementById('native-share-link').hidden = !navigator.share;
+                if (navigator.share) {
+                    await openNativeShare();
+                } else {
+                    shareStatus.textContent = 'Your browser does not support the system share panel. Copy the link or choose an app below.';
+                }
+            } catch (error) {
+                shareError.textContent = error.message || 'Unable to create a share link. Please try again.';
+                shareError.hidden = false;
+            } finally {
+                createShareButton.disabled = false;
+                createShareButton.textContent = 'Create secure link';
+            }
+        });
+
+        document.getElementById('copy-share-link').addEventListener('click', async function () {
+            try {
+                await navigator.clipboard.writeText(shareLinkInput.value);
+                shareStatus.textContent = 'Link copied to clipboard.';
+            } catch (error) {
+                shareLinkInput.focus();
+                shareLinkInput.select();
+                shareStatus.textContent = 'Copy was blocked. The link is selected; press Ctrl+C to copy it.';
+            }
+        });
+
+        document.getElementById('share-actual-file').addEventListener('click', async function (event) {
+            const button = event.currentTarget;
+            const originalLabel = button.textContent;
+            button.disabled = true;
+            button.textContent = 'Preparing file…';
+            shareError.hidden = true;
+            const fileStatus = document.getElementById('share-file-status');
+            fileStatus.textContent = '';
+            try {
+                const response = await fetch(
+                    '/documents/' + encodeURIComponent(currentShareDocumentId) + '/download',
+                    { credentials: 'same-origin' }
+                );
+                if (!response.ok) {
+                    throw new Error('Could not download this document from your vault.');
+                }
+                const blob = await response.blob();
+                const file = new File([blob], currentShareName, {
+                    type: blob.type || 'application/octet-stream'
+                });
+                if (!navigator.share || !navigator.canShare || !navigator.canShare({ files: [file] })) {
+                    fileStatus.textContent =
+                        'This browser cannot open the system share panel for file attachments. Use Download in the document list to save a copy, or create a secure link below.';
+                    return;
+                }
+
+                const sharePromise = navigator.share({
+                    files: [file],
+                    title: currentShareName,
+                    text: 'Document copy: ' + currentShareName
+                });
+                shareDialog.close();
+                await sharePromise;
+            } catch (error) {
+                if (error.name !== 'AbortError') {
+                    if (!shareDialog.open) {
+                        shareDialog.showModal();
+                    }
+                    shareError.textContent = error.message
+                        || 'Could not share the file. Download it or create a secure link instead.';
+                    shareError.hidden = false;
+                }
+            } finally {
+                button.disabled = false;
+                button.textContent = originalLabel;
+            }
+        });
+
+        async function openNativeShare() {
+            const sharePromise = navigator.share({
+                title: currentShareName,
+                text: 'Shared document: ' + currentShareName,
+                url: shareLinkInput.value
+            });
+            shareDialog.close();
+            try {
+                await sharePromise;
+            } catch (error) {
+                if (error.name === 'AbortError') {
+                    return;
+                } else {
+                    shareDialog.showModal();
+                    shareResult.hidden = false;
+                    shareStatus.textContent = 'Your browser blocked the share panel. Use More apps or copy the link below.';
+                }
+            }
+        }
+
+        document.getElementById('native-share-link').addEventListener('click', function () {
+            openNativeShare();
+        });
+
+        function updateProgressiveList(list) {
+            const rows = Array.from(list.children).filter(function (child) {
+                return child.classList.contains('activity-row');
+            });
+            rows.forEach(function (row, index) {
+                row.classList.toggle('is-extra-row', index > 0);
+            });
+
+            const toggle = document.querySelector(
+                '.progressive-toggle[aria-controls="' + list.id + '"]'
+            );
+            if (!toggle) {
+                return;
+            }
+
+            const remaining = Math.max(0, rows.length - 1);
+            const expanded = toggle.getAttribute('aria-expanded') === 'true';
+            toggle.dataset.remaining = String(remaining);
+            toggle.hidden = remaining === 0;
+            list.classList.toggle('is-collapsed', !expanded);
+            toggle.textContent = expanded ? 'Show less' : 'Show all (' + remaining + ')';
+        }
+
+        document.querySelectorAll('.progressive-list').forEach(function (list) {
+            updateProgressiveList(list);
+        });
+
+        document.querySelectorAll('.progressive-toggle').forEach(function (toggle) {
+            const list = document.getElementById(toggle.getAttribute('aria-controls'));
+            if (!list) {
+                toggle.disabled = true;
+                return;
+            }
+            toggle.addEventListener('click', function () {
+                const expanded = toggle.getAttribute('aria-expanded') === 'true';
+                toggle.setAttribute('aria-expanded', String(!expanded));
+                updateProgressiveList(list);
+            });
+        });
+
+        if (documentList) {
+            documentList.addEventListener('submit', async function (event) {
+                const form = event.target.closest('form[data-async-action]');
+                if (!form) {
+                    return;
+                }
+                event.preventDefault();
+
+                const button = form.querySelector('button[type="submit"]');
+                const row = form.closest('.document-row');
+                const status = document.getElementById('document-delete-status');
+                const originalLabel = button.textContent;
+                button.disabled = true;
+                button.textContent = 'Deleting…';
+                status.hidden = true;
+
+                try {
+                    const response = await fetch(form.dataset.asyncAction, {
+                        method: 'POST',
+                        body: new FormData(form),
+                        headers: { 'Accept': 'application/json' },
+                        credentials: 'same-origin'
+                    });
+                    const result = await response.json();
+                    if (!response.ok) {
+                        throw new Error(result.message || 'Could not delete the document. Please try again.');
+                    }
+
+                    document.getElementById('total-document-count').textContent =
+                        String(result.totalDocuments);
+                    document.getElementById('storage-used').textContent = result.storageBytes < 1024 * 1024
+                        ? (result.storageBytes / 1024).toFixed(1) + ' KB'
+                        : (result.storageBytes / (1024 * 1024)).toFixed(1) + ' MB';
+                    document.querySelectorAll('.folder-count').forEach(function (count) {
+                        const folderKey = count.dataset.folderKey;
+                        count.textContent = folderKey === 'all'
+                            ? String(result.totalDocuments)
+                            : String(result.folderCounts[folderKey] || 0);
+                    });
+
+                    row.classList.add('is-removing');
+                    window.setTimeout(function () {
+                        row.remove();
+                        updateDocumentFolderView(
+                            new URLSearchParams(window.location.search).get('folder') || 'all'
+                        );
+                    }, 180);
+                    status.className = 'alert alert-success';
+                    status.textContent = result.message;
+                    status.hidden = false;
+                } catch (error) {
+                    status.className = 'alert alert-error';
+                    status.textContent = error.message || 'Could not delete the document. Please try again.';
+                    status.hidden = false;
+                    button.disabled = false;
+                    button.textContent = originalLabel;
+                }
+            });
+        }
+
+        const activeSharedLinks = document.getElementById('active-shared-links');
+        if (activeSharedLinks) {
+            activeSharedLinks.addEventListener('submit', async function (event) {
+                const form = event.target.closest('.revoke-share-form');
+                if (!form) {
+                    return;
+                }
+                event.preventDefault();
+                const button = form.querySelector('button[type="submit"]');
+                const row = form.closest('.activity-row');
+                const status = document.getElementById('revoke-share-status');
+                button.disabled = true;
+                button.textContent = 'Revoking…';
+                status.textContent = '';
+                try {
+                    const response = await fetch(form.action, {
+                        method: 'POST',
+                        body: new FormData(form),
+                        headers: { 'Accept': 'application/json' },
+                        credentials: 'same-origin'
+                    });
+                    if (!response.ok) {
+                        throw new Error(response.status === 404
+                            ? 'This share link could not be found or is no longer available.'
+                            : 'Could not revoke the share link. Please try again.');
+                    }
+                    row.remove();
+                    updateProgressiveList(activeSharedLinks);
+                    const count = document.getElementById('active-shared-link-count');
+                    count.textContent = String(Math.max(0, Number(count.textContent) - 1));
+                    status.textContent = 'Share link revoked.';
+                    if (!activeSharedLinks.querySelector('.activity-row')) {
+                        document.getElementById('no-active-shared-links').hidden = false;
+                    }
+                } catch (error) {
+                    status.textContent = error.message || 'Could not revoke the share link. Please try again.';
+                    button.disabled = false;
+                    button.textContent = 'Revoke';
+                }
+            });
+        }
+
+        document.addEventListener('click', function (event) {
+            document.querySelectorAll('details[open]').forEach(function (menu) {
+                if (!menu.contains(event.target)) {
+                    menu.removeAttribute('open');
+                }
+            });
+        });
+    </script>
+</body>
+</html>
